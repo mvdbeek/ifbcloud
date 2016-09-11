@@ -4,11 +4,7 @@ try:
 except ImportError:
     from distutils.core import setup
 
-if os.path.exists("requirements.txt"):
-    requirements = open("requirements.txt").read().split("\n")
-else:
-    # In tox, it will cover them anyway.
-    requirements = []
+requirements = ['requests', 'configargparse', 'lxml']
 
 ENTRY_POINTS = '''
         [console_scripts]
@@ -19,10 +15,10 @@ readme = open('README.rst').read()
 
 setup(
     name='ifbcloud',
-    version='0.0.1',
+    version='0.0.2',
     packages=['ifbcloud'],
-    requirements=requirements,
-    readme=readme,
+    install_requires=requirements,
+    long_description=readme,
     entry_points=ENTRY_POINTS,
     keywords='IFB',
     classifiers=[
