@@ -35,6 +35,14 @@ To stop an instance, do
 
 ``ifbcloud stop -u <your_ifb_username> -p <your_ifb_password> -n <name_for_your_instance>``
 
+To get a list of available appliances, do
+
+``ifbcloud appliances -u <your_ifb_username> -p <your_ifb_password>``
+
+To start an appliances different from the default (Docker 16.07), e.g "BIO ComputeNode (16.07.2)", do
+
+``ifbcloud start -u <your_ifb_username> -p <your_ifb_password> -n <name_for_your_instance> -a "BIO ComputeNode (16.07.2)"``
+
 More options are available in the subcommands help section.
 
 Shortcuts
@@ -44,10 +52,8 @@ you can export the environmental variables ``IFB_USERNAME`` and ``IFB_PASSWORD``
 
 Limitations
 -----------
-We're currently just launching the Docker appliance (number 206), which is what I'm using all the time.
-PR's to improve this are welcome. You can extract the instance id's from the dashboard's html.
 
-Similarly, you can attach permanent storage to your new instances, but you first need to manually create the disks
+You can attach permanent storage to your new instances, but you first need to manually create the disks
 in the `IFB cloud storage interface <https://cloud.france-bioinformatique.fr/cloud/storage/>`_.
 
 This utility is not using any public API, just reverse-engineered from the browser's post requests, so this may

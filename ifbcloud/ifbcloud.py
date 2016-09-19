@@ -1,10 +1,12 @@
-import configargparse
 import json
-import requests
 import sys
 import time
+import configargparse
 from lxml import html
+import pkg_resources
+import requests
 
+__version__ = pkg_resources.get_distribution('ifbcloud').version
 requests.packages.urllib3.disable_warnings()
 
 
@@ -26,7 +28,9 @@ class IfbSession(object):
         self.password = password
         self.session = requests.session()
         self.csrftoken = self.get_csrftoken()
-        self.login()
+        self.welcome = self.login()
+        self.appliances_by_name = self.get_appliances()
+        self.appliances_by_id = {v: k for k, v in self.appliances_by_name.items()}
 
     def get_csrftoken(self):
         self.session.get(self.login_url, verify=False)
@@ -38,6 +42,11 @@ class IfbSession(object):
                           csrfmiddlewaretoken=self.csrftoken,
                           next=next_url)
         return self.session.post(self.login_url, data=login_data, headers=dict(Referer=self.login_url), verify=False)
+
+    def get_appliances(self):
+        tree = html.fromstring(self.welcome.content)
+        table = tree.xpath('//*[@id="id_appliance"]/option')
+        return {item.text: int(item.values()[0]) for item in table}
 
     @property
     def disks(self):
@@ -52,16 +61,16 @@ class IfbSession(object):
                 disk['Name'] = e
             if i - skip == 1:
                 disk['Size'] = e
-            if i -skip == 2:
+            if i - skip == 2:
                 disk['UUID'] = e
-                skip = i+1
+                skip = i + 1
                 disks.append(disk)
                 disk = dict()
         return disks
 
-    def start_instance(self, vm_name, instance_type, disk_uuid=''):
+    def start_instance(self, vm_name, instance_type, disk_uuid='', appliance_id=215):
         new_instance_data = {'csrfmiddlewaretoken': self.csrftoken,
-                             'appliance': 215,
+                             'appliance': appliance_id,
                              'filter_thematic_fields': '',
                              'filter_tools': '',
                              'vm_name': vm_name,
@@ -163,21 +172,29 @@ class IfbSession(object):
 
 
 def parse_args(help=False):
-    parent = configargparse.ArgumentParser(prog='ifbcloud version 0.1.1', add_help=False)
+    parent = configargparse.ArgumentParser(prog="ifbcloud version %s" % __version__, add_help=False)
     parent.add_argument('-u', '--username', env_var='IFB_USERNAME', required=True, help="Your IFB username")
     parent.add_argument('-p', '--password', env_var='IFB_PASSWORD', required=True, help="Your IFB password")
-    parent.add_argument('--version', action='version', version='0.1.1')
+    parent.add_argument('--version', action='version', version=__version__)
     args = configargparse.ArgumentParser()
     subparsers = args.add_subparsers(help='Select one of the following subcommands')
     status = subparsers.add_parser('status', parents=[parent], help='Prints the current status of your running IFB VMs')
     status.set_defaults(func=get_instance_status)
     status = subparsers.add_parser('disks', parents=[parent], help='Prints the current status of your IFB disks')
     status.set_defaults(func=get_disk_status)
+    status = subparsers.add_parser('appliances', parents=[parent], help='Prints the currently available appliances')
+    status.set_defaults(func=get_appliances)
     start = subparsers.add_parser('start', parents=[parent], help='Start a new instance')
     start.set_defaults(func=start_instance)
     start.add_argument('-n', '--name', required=True, help="Name of the instance to start.")
     start.add_argument('-t', '--type', default='c2.small', help="Choose the instance type to start",
                        choices=IfbSession.instance_types.keys())
+    start.add_argument('-a', '--appliance', default='',
+                       help='Select an appliance by name. '
+                            '(Use "ifbcloud appliances" to get a list of all appliances)')
+    start.add_argument('-ai', '--appliance_id', default=215, type=int,
+                       help='Select an appliance by ID. '
+                            '(Use "ifbcloud appliances" to get a list of all appliances)')
     start.add_argument('-dn', '--disk_name', default='', help='Attach the disk of this name to the new instance')
     start.add_argument('-du', '--disk_uuid', default='', help='Attach the disk of this UUID to the new instance')
     stop = subparsers.add_parser('stop', parents=[parent], help='Stop an instance')
@@ -195,12 +212,17 @@ def get_ifb(args):
 
 def get_instance_status(args):
     ifb = get_ifb(args)
-    sys.stdout.write(json.dumps(ifb.status))
+    sys.stdout.write(json.dumps(ifb.status, sort_keys=True, indent=4))
 
 
 def get_disk_status(args):
     ifb = get_ifb(args)
-    sys.stdout.write(json.dumps(ifb.disks))
+    sys.stdout.write(json.dumps(ifb.disks, sort_keys=True, indent=4))
+
+
+def get_appliances(args):
+    ifb = get_ifb(args)
+    sys.stdout.write(json.dumps(ifb.appliances_by_name, sort_keys=True, indent=4))
 
 
 def start_instance(args):
@@ -212,7 +234,16 @@ def start_instance(args):
         uuid = ifb.get_disk_uuid(args.disk_name)
         if not uuid:
             raise Exception("Disk '%s' not found" % args.disk_name)
-    ifb.start_instance(vm_name=args.name, instance_type=args.type, disk_uuid=uuid)
+    appliance_id = args.appliance_id
+    if args.appliance:
+        appliance_id = ifb.appliances_by_name.get(args.appliance, None)
+        if not appliance_id:
+            raise Exception("Appliance '%s' not found. Valid appliances are: \n %s" %
+                            (args.appliance, ifb.appliances_by_name))
+    if appliance_id not in ifb.appliances_by_id:
+        raise Exception("Appliance id '%s' not found. Valid appliances are: \n %s" %
+                        (appliance_id, ifb.appliances_by_name))
+    ifb.start_instance(vm_name=args.name, instance_type=args.type, disk_uuid=uuid, appliance_id=appliance_id)
     sys.stdout.write(ifb.get_instance_ip(args.name))
 
 
@@ -221,6 +252,7 @@ def stop_instance(args):
     if not args.id:
         args.id = ifb.get_instance_id(args.name)
     ifb.shutdown_instance(args.id)
+
 
 def main():
     args = parse_args()
