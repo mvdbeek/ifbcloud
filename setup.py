@@ -1,4 +1,3 @@
-import os
 try:
     from setuptools import setup
 except ImportError:
@@ -12,13 +11,14 @@ ENTRY_POINTS = '''
 '''
 
 readme = open('README.rst').read()
+history = open('HISTORY.rst').read().replace('.. :changelog:', '')
 
 setup(
     name='ifbcloud',
-    version='0.0.2',
+    version='0.0.3',
     packages=['ifbcloud'],
     install_requires=requirements,
-    long_description=readme,
+    long_description=readme + '\n\n' + history,
     entry_points=ENTRY_POINTS,
     keywords='IFB',
     classifiers=[

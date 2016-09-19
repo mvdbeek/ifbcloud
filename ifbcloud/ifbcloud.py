@@ -32,14 +32,34 @@ class IfbSession(object):
         self.session.get(self.login_url, verify=False)
         return self.session.cookies.get_dict()['csrftoken']
 
-    def login(self):
+    def login(self, next_url='/cloud/instance'):
         login_data = dict(username=self.username,
                           password=self.password,
                           csrfmiddlewaretoken=self.csrftoken,
-                          next='/cloud/instance/')
+                          next=next_url)
         return self.session.post(self.login_url, data=login_data, headers=dict(Referer=self.login_url), verify=False)
 
-    def start_instance(self, vm_name, instance_type):
+    @property
+    def disks(self):
+        r = self.login(next_url='/cloud/storage')
+        tree = html.fromstring(r.content)
+        element = tree.xpath('//*[@id="storages"]/tbody')[0]
+        skip = 0
+        disks = []
+        disk = dict()
+        for i, e in enumerate(element.itertext()):
+            if i - skip == 0:
+                disk['Name'] = e
+            if i - skip == 1:
+                disk['Size'] = e
+            if i -skip == 2:
+                disk['UUID'] = e
+                skip = i+1
+                disks.append(disk)
+                disk = dict()
+        return disks
+
+    def start_instance(self, vm_name, instance_type, disk_uuid=''):
         new_instance_data = {'csrfmiddlewaretoken': self.csrftoken,
                              'appliance': '206',
                              'filter_thematic_fields': '',
@@ -47,7 +67,7 @@ class IfbSession(object):
                              'vm_name': vm_name,
                              'instance_type': self.instance_types[instance_type],
                              'instance_number': '1',
-                             'storage': '',
+                             'storage': disk_uuid,
                              'form_type': 'instance_creation'}
         return self.session.post(self.instance_url,
                                  data=new_instance_data,
@@ -124,6 +144,11 @@ class IfbSession(object):
             if vm.get('Name', None) == vm_name:
                 return vm['ID']
 
+    def get_disk_uuid(self, disk_name):
+        for disk in self.disks:
+            if disk.get('Name', None) == disk_name:
+                return disk['UUID']
+
     def shutdown_instance(self, instance_id):
         shutdown_data = {'csrfmiddlewaretoken': self.csrftoken,
                          'operation': 'shutdown',
@@ -144,12 +169,16 @@ def parse_args(help=False):
     args = configargparse.ArgumentParser()
     subparsers = args.add_subparsers(help='Select one of the following subcommands')
     status = subparsers.add_parser('status', parents=[parent], help='Prints the current status of your running IFB VMs')
-    status.set_defaults(func=get_status)
+    status.set_defaults(func=get_instance_status)
+    status = subparsers.add_parser('disks', parents=[parent], help='Prints the current status of your IFB disks')
+    status.set_defaults(func=get_disk_status)
     start = subparsers.add_parser('start', parents=[parent], help='Start a new instance')
     start.set_defaults(func=start_instance)
     start.add_argument('-n', '--name', required=True, help="Name of the instance to start.")
     start.add_argument('-t', '--type', default='c2.small', help="Choose the instance type to start",
                        choices=IfbSession.instance_types.keys())
+    start.add_argument('-dn', '--disk_name', default='', help='Attach the disk of this name to the new instance')
+    start.add_argument('-du', '--disk_uuid', default='', help='Attach the disk of this UUID to the new instance')
     stop = subparsers.add_parser('stop', parents=[parent], help='Stop an instance')
     stop.add_argument('-n', '--name', default=None, help="Name of the instance to stop.")
     stop.add_argument('-i', '--id', default=None, help="ID of the instance to stop.")
@@ -163,14 +192,26 @@ def get_ifb(args):
     return IfbSession(args.username, args.password)
 
 
-def get_status(args):
+def get_instance_status(args):
     ifb = get_ifb(args)
     sys.stdout.write(json.dumps(ifb.status))
 
 
+def get_disk_status(args):
+    ifb = get_ifb(args)
+    sys.stdout.write(json.dumps(ifb.disks))
+
+
 def start_instance(args):
     ifb = get_ifb(args)
-    ifb.start_instance(vm_name=args.name, instance_type=args.type)
+    uuid = ""
+    if args.disk_uuid:
+        uuid = args.disk_uuid
+    elif args.disk_name:
+        uuid = ifb.get_disk_uuid(args.disk_name)
+        if not uuid:
+            raise Exception("Disk '%s' not found" % args.disk_name)
+    ifb.start_instance(vm_name=args.name, instance_type=args.type, disk_uuid=uuid)
     sys.stdout.write(ifb.get_instance_ip(args.name))
 
 
