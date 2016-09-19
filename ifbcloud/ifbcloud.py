@@ -61,7 +61,7 @@ class IfbSession(object):
 
     def start_instance(self, vm_name, instance_type, disk_uuid=''):
         new_instance_data = {'csrfmiddlewaretoken': self.csrftoken,
-                             'appliance': '206',
+                             'appliance': 215,
                              'filter_thematic_fields': '',
                              'filter_tools': '',
                              'vm_name': vm_name,
@@ -163,9 +163,10 @@ class IfbSession(object):
 
 
 def parse_args(help=False):
-    parent = configargparse.ArgumentParser(add_help=False)
+    parent = configargparse.ArgumentParser(prog='ifbcloud version 0.1.1', add_help=False)
     parent.add_argument('-u', '--username', env_var='IFB_USERNAME', required=True, help="Your IFB username")
     parent.add_argument('-p', '--password', env_var='IFB_PASSWORD', required=True, help="Your IFB password")
+    parent.add_argument('--version', action='version', version='0.1.1')
     args = configargparse.ArgumentParser()
     subparsers = args.add_subparsers(help='Select one of the following subcommands')
     status = subparsers.add_parser('status', parents=[parent], help='Prints the current status of your running IFB VMs')
