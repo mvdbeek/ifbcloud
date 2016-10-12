@@ -68,7 +68,7 @@ class IfbSession(object):
                 disk = dict()
         return disks
 
-    def start_instance(self, vm_name, instance_type, disk_uuid='', appliance_id=215):
+    def start_instance(self, vm_name, instance_type, disk_uuid='', appliance_id=206):
         new_instance_data = {'csrfmiddlewaretoken': self.csrftoken,
                              'appliance': appliance_id,
                              'filter_thematic_fields': '',
@@ -192,7 +192,7 @@ def parse_args(help=False):
     start.add_argument('-a', '--appliance', default='',
                        help='Select an appliance by name. '
                             '(Use "ifbcloud appliances" to get a list of all appliances)')
-    start.add_argument('-ai', '--appliance_id', default=215, type=int,
+    start.add_argument('-ai', '--appliance_id', default=206, type=int,
                        help='Select an appliance by ID. '
                             '(Use "ifbcloud appliances" to get a list of all appliances)')
     start.add_argument('-dn', '--disk_name', default='', help='Attach the disk of this name to the new instance')

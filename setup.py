@@ -15,7 +15,7 @@ history = open('HISTORY.rst').read().replace('.. :changelog:', '')
 
 setup(
     name='ifbcloud',
-    version='0.1.1',
+    version='0.1.2',
     packages=['ifbcloud'],
     install_requires=requirements,
     long_description=readme + '\n\n' + history,
